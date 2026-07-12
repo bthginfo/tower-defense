@@ -8,3 +8,4 @@ assets/third_party/.cache/
 critter-covenant-*-v*.png
 critter-covenant-v*.png
 critter-covenant-*.png.import
+tmp/

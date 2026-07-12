@@ -2,12 +2,14 @@ extends Control
 
 const UNIT_DEFS := GameContent.UNITS
 const PORTRAITS:Array[Texture2D] = [
-	preload("res://assets/third_party/kenney/animals/rabbit.png"),preload("res://assets/third_party/kenney/animals/dog.png"),preload("res://assets/third_party/kenney/animals/duck.png"),preload("res://assets/third_party/kenney/animals/owl.png"),preload("res://assets/third_party/kenney/animals/bear.png"),preload("res://assets/third_party/kenney/animals/frog.png"),
-	preload("res://assets/third_party/kenney/animals/parrot.png"),preload("res://assets/third_party/kenney/animals/panda.png"),preload("res://assets/third_party/kenney/animals/snake.png"),preload("res://assets/third_party/kenney/animals/crocodile.png"),preload("res://assets/third_party/kenney/animals/moose.png"),preload("res://assets/third_party/kenney/animals/chick.png")
+	preload("res://assets/generated/units/bramble_bun.png"),preload("res://assets/generated/units/cinder_fox.png"),preload("res://assets/generated/units/brook_otter.png"),preload("res://assets/generated/units/gale_finch.png"),preload("res://assets/generated/units/moss_guardian.png"),preload("res://assets/generated/units/fizzlepaw.png"),
+	preload("res://assets/generated/units/moon_moth.png"),preload("res://assets/generated/units/pollen_pixie.png"),preload("res://assets/generated/units/coal_badger.png"),preload("res://assets/generated/units/tempest_lynx.png"),preload("res://assets/generated/units/tidecaller_toad.png"),preload("res://assets/generated/units/starhorn_stag.png")
 ]
+const ENEMY_SPRITES:Array[Texture2D] = [preload("res://assets/generated/enemies/gloomling.png"),preload("res://assets/generated/enemies/shellsnout.png"),preload("res://assets/generated/enemies/wisp.png"),preload("res://assets/generated/enemies/mender.png"),preload("res://assets/generated/enemies/corruption_colossus.png")]
 const BUTTON_TEX:Texture2D=preload("res://assets/third_party/kenney/ui/button_rectangle_depth_gradient.png")
-const PATH := [Vector2(0,170),Vector2(210,170),Vector2(210,365),Vector2(520,365),Vector2(520,150),Vector2(790,150),Vector2(790,420),Vector2(1100,420)]
-const SLOTS:Array[Vector2] = [Vector2(105,105),Vector2(105,245),Vector2(330,285),Vector2(395,430),Vector2(440,230),Vector2(650,90),Vector2(675,245),Vector2(690,455),Vector2(865,325),Vector2(900,485),Vector2(985,335),Vector2(1060,485)]
+const ARENA_TEX:Texture2D=preload("res://assets/generated/verdant_crossroads_premium.png")
+const PATH := [Vector2(74,250),Vector2(260,200),Vector2(430,330),Vector2(260,490),Vector2(510,470),Vector2(660,260),Vector2(850,455),Vector2(1160,385)]
+const SLOTS:Array[Vector2] = [Vector2(300,132),Vector2(530,225),Vector2(372,337),Vector2(245,455),Vector2(465,455),Vector2(625,380),Vector2(620,545),Vector2(800,135),Vector2(940,180),Vector2(830,318),Vector2(760,480),Vector2(930,520)]
 var rng := RandomNumberGenerator.new()
 var units:Array[Dictionary] = []
 var enemies:Array[Dictionary] = []
@@ -257,33 +259,32 @@ func _draw() -> void:
 	var size := get_viewport_rect().size
 	if screen=="menu": draw_menu(size); return
 	var map:Dictionary=GameContent.MAPS[map_index]
-	draw_rect(Rect2(0,0,size.x,105),Color("#102438"))
-	draw_rect(Rect2(0,495,size.x,size.y-495),Color("#102438"))
-	draw_rect(Rect2(0,105,size.x,390),Color(map.ground,0.78))
-	for i in PATH.size()-1:
-		draw_line(PATH[i]+Vector2(0,8),PATH[i+1]+Vector2(0,8),Color(0.05,0.08,0.1,0.28),54,true)
-		draw_line(PATH[i],PATH[i+1],map.path,46,true)
+	draw_texture_rect(ARENA_TEX,Rect2(Vector2.ZERO,size),false)
+	draw_rect(Rect2(0,0,size.x,92),Color(0.025,0.06,0.1,0.92))
+	draw_rect(Rect2(0,size.y-96,size.x,96),Color(0.025,0.06,0.1,0.92))
+	if map_index>0: draw_rect(Rect2(Vector2.ZERO,size),Color(map.ground,0.08))
 	for slot in SLOTS:
-		draw_circle(slot,36,Color(0.03,0.08,0.11,0.62)); draw_arc(slot,32,0,TAU,32,Color(0.55,0.85,0.75,0.42),2)
+		draw_circle(slot,31,Color(0.05,0.2,0.24,0.20)); draw_arc(slot,34,0,TAU,40,Color(0.35,0.95,0.88,0.48),2)
 	draw_string(ThemeDB.fallback_font,Vector2(28,42),"CRITTER COVENANT",HORIZONTAL_ALIGNMENT_LEFT,400,30,Color("#f4e8bf"))
 	draw_string(ThemeDB.fallback_font,Vector2(28,78),"❤ %d    ✦ %d Essence    Welle %d    Gegner %d" %[lives,essence,wave,enemies.size()+spawn_left],0,-1,21,Color.WHITE)
 	var cov := active_covenants()
 	draw_string(ThemeDB.fallback_font,Vector2(size.x-390,42),"Covenants: "+(", ".join(cov) if cov else "—"),0,360,18,Color("#f0d96c"))
 	for e in enemies:
 		var ep:Vector2=e.pos
-		draw_circle(ep,e.radius,e.color)
+		var sprite_size:=92.0 if e.boss else 54.0
+		var sprite:Texture2D=ENEMY_SPRITES[4 if e.boss else int(e.kind)]
+		draw_texture_rect(sprite,Rect2(ep-Vector2(sprite_size/2,sprite_size*0.68),Vector2(sprite_size,sprite_size)),false)
 		if e.boss: draw_arc(ep,e.radius+9,0,TAU,48,Color("#ffdb70"),3)
-		draw_circle(ep-Vector2(5,4),3,Color.WHITE); draw_circle(ep+Vector2(5,-4),3,Color.WHITE)
 		draw_rect(Rect2(ep.x-e.radius,ep.y-e.radius-9,e.radius*2,4),Color("#401b32"))
 		draw_rect(Rect2(ep.x-e.radius,ep.y-e.radius-9,e.radius*2*maxf(0,e.hp/e.max_hp),4),Color("#72e082"))
 	for p in projectiles: draw_circle(p.pos,5,p.color)
 	for p in particles: draw_circle(p.pos,maxf(1,p.life*9),Color(p.color,p.life*1.8))
 	for i in units.size():
 		var u:=units[i]; var d:Dictionary=UNIT_DEFS[u.type]
-		if i==selected: draw_circle(u.pos,38,Color("#fff0a6")); draw_arc(u.pos,175,0,TAU,64,Color(1,1,1,0.1),2)
-		draw_circle(u.pos,31,Color("#0e1b29")); draw_texture_rect(PORTRAITS[u.type],Rect2(u.pos-Vector2(27,27),Vector2(54,54)),false,d.color.lightened(0.22))
-		draw_string(ThemeDB.fallback_font,u.pos+Vector2(-55,47),d.name,1,110,13,Color.WHITE)
-		draw_string(ThemeDB.fallback_font,u.pos+Vector2(-10,6),str(u.level),1,20,16,Color("#17202a"))
+		if i==selected: draw_circle(u.pos,43,Color(1,0.88,0.35,0.28)); draw_arc(u.pos,float(d.range),0,TAU,64,Color(0.4,1,0.85,0.18),2)
+		draw_texture_rect(PORTRAITS[u.type],Rect2(u.pos-Vector2(43,62),Vector2(86,86)),false)
+		draw_string(ThemeDB.fallback_font,u.pos+Vector2(-55,38),d.name,1,110,12,Color.WHITE)
+		draw_circle(u.pos+Vector2(28,-30),12,Color("#18243c")); draw_string(ThemeDB.fallback_font,u.pos+Vector2(20,-24),str(u.level),1,16,13,Color("#ffe27a"))
 	summon_rect=Rect2(size.x-245,size.y-72,215,50); wave_rect=Rect2(30,size.y-72,190,50); merge_rect=Rect2(size.x/2-95,size.y-72,190,50)
 	draw_button(wave_rect,"NÄCHSTE WELLE",not wave_running); draw_button(summon_rect,"BESCHWÖREN 25",essence>=25); draw_button(merge_rect,"3× MERGE",selected>=0)
 	if selected>=0 and selected<units.size(): draw_unit_card(size,units[selected])
@@ -301,13 +302,12 @@ func draw_button(rect:Rect2,label:String,enabled:bool) -> void:
 	draw_string(ThemeDB.fallback_font,rect.position+Vector2(8,33),label,1,rect.size.x-16,18,Color.WHITE)
 
 func draw_menu(size:Vector2) -> void:
-	draw_rect(Rect2(Vector2.ZERO,size),Color("#102336"))
-	for i in 18:
-		var x=float((i*173)%int(size.x)); var y=float(90+(i*97)%int(size.y-100))
-		draw_circle(Vector2(x,y),60+float(i%4)*18,Color(0.16,0.42,0.38,0.16))
-	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-360,145),"CRITTER COVENANT",1,720,48,Color("#fff0bb"))
+	draw_texture_rect(ARENA_TEX,Rect2(Vector2.ZERO,size),false)
+	draw_rect(Rect2(Vector2.ZERO,size),Color(0.015,0.04,0.08,0.72))
+	draw_rect(Rect2(size.x/2-390,58,780,605),Color(0.02,0.065,0.105,0.82))
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-360,145),"CRITTER COVENANT",1,720,48,Color("#ffe6a0"))
 	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-300,190),"SCHMIEDE PAKTE. BESIEGE DIE VERDERBNIS.",1,600,17,Color("#a9cad0"))
-	for i in 6: draw_texture_rect(PORTRAITS[i],Rect2(size.x/2-255+i*82,235+sin(i)*12,68,68),false)
+	for i in 6: draw_texture_rect(PORTRAITS[i],Rect2(size.x/2-275+i*90,218+sin(i)*10,86,86),false)
 	var map:Dictionary=GameContent.MAPS[map_index]
 	menu_map_rect=Rect2(size.x/2-240,345,480,70); draw_texture_rect(BUTTON_TEX,menu_map_rect,false,Color("#387f83"))
 	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-225,375),map.name,1,450,23,Color.WHITE)

@@ -5,5 +5,10 @@
     {"id":"kenney-animal-pack-remastered","display_name":"Kenney Animal Pack Remastered","type":"portraits","source":"https://kenney.nl/assets/animal-pack-remastered","download_url":"https://kenney.nl/media/pages/assets/animal-pack-remastered/54a307a369-1774771709/kenney_animal-pack-remastered.zip","author":"Kenney","license":"CC0-1.0","license_file":"LICENSES/third_party/KENNEY_CC0.txt","attribution_required":false,"commercial_use":true,"modification_allowed":true,"review_status":"approved"},
     {"id":"kenney-tower-defense-kit","display_name":"Kenney Tower Defense Kit","type":"3d-environment","source":"https://kenney.nl/assets/tower-defense-kit","download_url":"https://kenney.nl/media/pages/assets/tower-defense-kit/a402493eaa-1726471567/kenney_tower-defense-kit.zip","author":"Kenney","license":"CC0-1.0","license_file":"LICENSES/third_party/KENNEY_CC0.txt","attribution_required":false,"commercial_use":true,"modification_allowed":true,"review_status":"approved"}
   ],
-  "notes": "Downloads are reproducible through scripts/assets/fetch_assets.ps1; the script reports SHA-256 checksums."
+  "generated_assets": [
+    {"id":"original-verdant-arena","type":"battlefield-background","path":"assets/generated/verdant_crossroads_premium.png","creator":"OpenAI image generation","third_party_input":false,"review_status":"approved"},
+    {"id":"original-critter-guardians","type":"unit-sprites","path":"assets/generated/units/","creator":"OpenAI image generation","third_party_input":false,"processing":"chroma removal and 4x3 atlas split","review_status":"approved"},
+    {"id":"original-corruption-enemies","type":"enemy-sprites","path":"assets/generated/enemies/","creator":"OpenAI image generation","third_party_input":false,"processing":"chroma removal and 5-column atlas split","review_status":"approved"}
+  ],
+  "notes": "Third-party downloads are reproducible through scripts/assets/fetch_assets.ps1; generated atlas post-processing scripts live in tools/."
 }
