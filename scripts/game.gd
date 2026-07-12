@@ -188,11 +188,11 @@ func _draw() -> void:
 	summon_rect=Rect2(size.x-245,size.y-72,215,50); wave_rect=Rect2(30,size.y-72,190,50); merge_rect=Rect2(size.x/2-95,size.y-72,190,50)
 	draw_button(wave_rect,"NÄCHSTE WELLE",not wave_running); draw_button(summon_rect,"BESCHWÖREN 25",essence>=25); draw_button(merge_rect,"3× MERGE",selected>=0)
 	if message_time>0 or game_over:
-		draw_rect(Rect2(size.x/2-260,112,520,48),Color(0.05,0.08,0.12,0.9),true,10)
+		draw_rect(Rect2(size.x/2-260,112,520,48),Color(0.05,0.08,0.12,0.9))
 		draw_string(ThemeDB.fallback_font,Vector2(size.x/2-245,145),message,1,490,20,Color.WHITE)
 
 func draw_button(rect:Rect2,label:String,enabled:bool) -> void:
-	draw_rect(rect,Color("#d89445") if enabled else Color("#56616b"),true,12)
+	draw_rect(rect,Color("#d89445") if enabled else Color("#56616b"))
 	draw_string(ThemeDB.fallback_font,rect.position+Vector2(8,33),label,1,rect.size.x-16,18,Color.WHITE)
 
 func save_progress() -> void:
