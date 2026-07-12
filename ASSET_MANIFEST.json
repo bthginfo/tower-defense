@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "assets": [],
+  "notes": "Vertical Slice uses procedural Godot primitives only. Candidate CC0 sources remain unbundled until individually verified."
+}
