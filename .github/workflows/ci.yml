@@ -1,0 +1,22 @@
+name: Godot CI
+on:
+  push:
+  pull_request:
+jobs:
+  test-and-export:
+    runs-on: ubuntu-latest
+    container: barichello/godot-ci:4.4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate content and summon table
+        run: godot --headless --path . --script tests/run_tests.gd
+      - name: Deterministic balancing sample
+        run: godot --headless --path . --script tools/simulate.gd > simulation-report.json
+      - name: Import project
+        run: godot --headless --path . --editor --quit
+      - name: Export Web
+        run: mkdir -p public && godot --headless --path . --export-release Web public/index.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: critter-covenant-web
+          path: public

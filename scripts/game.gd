@@ -1,13 +1,11 @@
 extends Control
 
-const UNIT_DEFS := [
-	{"name":"Bramble Bun","element":"Nature","role":"Damage","damage":13.0,"rate":0.75,"color":Color("#63c174")},
-	{"name":"Cinder Fox","element":"Fire","role":"Area","damage":18.0,"rate":1.1,"color":Color("#f47b54")},
-	{"name":"Brook Otter","element":"Water","role":"Support","damage":9.0,"rate":0.65,"color":Color("#55b9db")},
-	{"name":"Gale Finch","element":"Storm","role":"Control","damage":11.0,"rate":0.55,"color":Color("#e6d85c")},
-	{"name":"Moss Guardian","element":"Guardian","role":"Tank","damage":8.0,"rate":0.9,"color":Color("#789d65")},
-	{"name":"Fizzlepaw","element":"Alchemist","role":"Debuffer","damage":15.0,"rate":0.8,"color":Color("#bf75da")}
+const UNIT_DEFS := GameContent.UNITS
+const PORTRAITS:Array[Texture2D] = [
+	preload("res://assets/third_party/kenney/animals/rabbit.png"),preload("res://assets/third_party/kenney/animals/dog.png"),preload("res://assets/third_party/kenney/animals/duck.png"),preload("res://assets/third_party/kenney/animals/owl.png"),preload("res://assets/third_party/kenney/animals/bear.png"),preload("res://assets/third_party/kenney/animals/frog.png"),
+	preload("res://assets/third_party/kenney/animals/parrot.png"),preload("res://assets/third_party/kenney/animals/panda.png"),preload("res://assets/third_party/kenney/animals/snake.png"),preload("res://assets/third_party/kenney/animals/crocodile.png"),preload("res://assets/third_party/kenney/animals/moose.png"),preload("res://assets/third_party/kenney/animals/chick.png")
 ]
+const BUTTON_TEX:Texture2D=preload("res://assets/third_party/kenney/ui/button_rectangle_depth_gradient.png")
 const PATH := [Vector2(0,170),Vector2(210,170),Vector2(210,365),Vector2(520,365),Vector2(520,150),Vector2(790,150),Vector2(790,420),Vector2(1100,420)]
 var rng := RandomNumberGenerator.new()
 var units:Array[Dictionary] = []
@@ -28,6 +26,17 @@ var summon_rect := Rect2()
 var wave_rect := Rect2()
 var merge_rect := Rect2()
 var speed := 1.0
+var screen := "menu"
+var map_index := 0
+var best_wave := 0
+var star_dust := 0
+var tutorial_step := 0
+var menu_play_rect := Rect2()
+var menu_map_rect := Rect2()
+var tutorial_rect := Rect2()
+var particles:Array[Dictionary] = []
+var combo := 0
+var combo_clock := 0.0
 
 func _ready() -> void:
 	rng.seed = int(Time.get_unix_time_from_system())
@@ -35,9 +44,12 @@ func _ready() -> void:
 	queue_redraw()
 
 func _process(delta:float) -> void:
+	if screen != "match": queue_redraw(); return
 	if game_over: queue_redraw(); return
 	var dt := delta * speed
 	message_time = maxf(0.0, message_time-delta)
+	combo_clock = maxf(0.0, combo_clock-delta)
+	if combo_clock <= 0: combo = 0
 	if wave_running:
 		spawn_clock -= dt
 		if spawn_left > 0 and spawn_clock <= 0:
@@ -47,6 +59,7 @@ func _process(delta:float) -> void:
 	update_units(dt)
 	update_enemies(dt)
 	update_projectiles(dt)
+	update_particles(dt)
 	if wave_running and spawn_left == 0 and enemies.is_empty():
 		wave_running = false
 		essence += 25 + wave * 3
@@ -63,20 +76,25 @@ func start_wave() -> void:
 	wave_running = true
 	message = "BOSS: Der Verderbnis-Koloss!" if boss_wave else "Welle %d beginnt" % wave
 	message_time = 2.5
+	if tutorial_step==2: tutorial_step=3
 
 func spawn_enemy() -> void:
 	var kind := rng.randi_range(0,3)
-	var hp := 38.0 + wave * 14.0
-	var speed_value := 48.0 + kind*7.0
-	var color:Color = [Color("#d34d6d"),Color("#9b6b55"),Color("#7d65c1"),Color("#d98b42")][kind]
-	var radius := 15.0 + kind
+	var ed:Dictionary = GameContent.ENEMIES[kind]
+	var hp:float = (38.0 + wave * 14.0) * float(ed.hp) * [1.0,0.92,1.28][map_index]
+	var speed_value:float = (48.0 + wave*0.8) * float(ed.speed) * [1.0,1.18,0.82][map_index]
+	var color:Color = ed.color
+	var radius:float = ed.radius
 	if boss_wave:
 		hp *= 12.0; speed_value = 30.0; radius = 34.0; color = Color("#6f315c")
-	enemies.append({"pos":PATH[0],"segment":0,"hp":hp,"max_hp":hp,"speed":speed_value,"color":color,"radius":radius,"boss":boss_wave})
+	enemies.append({"pos":PATH[0],"segment":0,"hp":hp,"max_hp":hp,"speed":speed_value,"base_speed":speed_value,"color":color,"radius":radius,"boss":boss_wave,"armor":ed.armor,"slow":0.0,"kind":kind})
 
 func update_enemies(dt:float) -> void:
 	for i in range(enemies.size()-1,-1,-1):
 		var e := enemies[i]
+		e.slow = maxf(0.0,e.slow-dt)
+		e.speed = e.base_speed * (0.55 if e.slow>0 else 1.0)
+		if e.boss and e.hp/e.max_hp<0.5: e.speed=e.base_speed*1.55; e.color=Color("#e34f74")
 		var target:Vector2 = PATH[e.segment+1]
 		e.pos = e.pos.move_toward(target, e.speed*dt)
 		if e.pos.distance_to(target) < 1.0:
@@ -93,12 +111,12 @@ func update_units(dt:float) -> void:
 		var best := -1
 		var progress := -1
 		for i in enemies.size():
-			if u.pos.distance_to(enemies[i].pos) <= 175.0 and enemies[i].segment >= progress:
+			if u.pos.distance_to(enemies[i].pos) <= float(UNIT_DEFS[u.type].range) and enemies[i].segment >= progress:
 				best=i; progress=enemies[i].segment
 		if best >= 0:
 			var d:Dictionary = UNIT_DEFS[u.type]
 			var covenant_bonus := 1.25 if active_covenants().size() > 0 else 1.0
-			projectiles.append({"pos":u.pos,"target":enemies[best],"damage":d.damage*u.level*covenant_bonus,"color":d.color})
+			projectiles.append({"pos":u.pos,"target":enemies[best],"damage":d.damage*u.level*covenant_bonus,"color":d.accent,"type":u.type,"level":u.level})
 			u.cooldown = d.rate / (1.0 + (u.level-1)*0.12)
 
 func update_projectiles(dt:float) -> void:
@@ -107,23 +125,57 @@ func update_projectiles(dt:float) -> void:
 		if not enemies.has(p.target): projectiles.remove_at(i); continue
 		p.pos = p.pos.move_toward(p.target.pos, 520.0*dt)
 		if p.pos.distance_to(p.target.pos) < 10:
-			p.target.hp -= p.damage
+			var d:Dictionary=UNIT_DEFS[p.type]
+			var dealt:float=p.damage*(1.0-float(p.target.armor))
+			if d.element=="Arcane" and p.target.hp/p.target.max_hp<0.3: dealt*=1.5
+			p.target.hp -= dealt
+			if d.element=="Water": p.target.slow=1.2+0.2*p.level
+			if d.element=="Fire": splash_damage(p.target,dealt*0.38)
+			if d.element=="Storm": chain_damage(p.target,dealt*0.50)
+			burst(p.target.pos,d.color,5+p.level)
 			if p.target.hp <= 0:
 				var reward := 18 if p.target.boss else 3
 				essence += reward
+				combo += 1; combo_clock=2.2
 				enemies.erase(p.target)
 			projectiles.remove_at(i)
+
+func splash_damage(origin:Dictionary,amount:float) -> void:
+	for e in enemies:
+		if e != origin and e.pos.distance_to(origin.pos)<75: e.hp-=amount
+
+func chain_damage(origin:Dictionary,amount:float) -> void:
+	var nearest:Dictionary={}; var distance:=120.0
+	for e in enemies:
+		if e != origin and e.pos.distance_to(origin.pos)<distance: nearest=e; distance=e.pos.distance_to(origin.pos)
+	if not nearest.is_empty(): nearest.hp-=amount; burst(nearest.pos,Color("#fff06a"),4)
+
+func burst(pos:Vector2,color:Color,count:int) -> void:
+	for i in count:
+		var angle:=rng.randf_range(0,TAU)
+		particles.append({"pos":pos,"vel":Vector2.from_angle(angle)*rng.randf_range(30,95),"life":rng.randf_range(0.25,0.55),"color":color})
+
+func update_particles(dt:float) -> void:
+	for i in range(particles.size()-1,-1,-1):
+		particles[i].life-=dt; particles[i].pos+=particles[i].vel*dt; particles[i].vel*=0.9
+		if particles[i].life<=0: particles.remove_at(i)
 
 func summon() -> void:
 	if essence < 25 or units.size() >= 12: message="Nicht genug Essence oder Brett voll"; message_time=2; return
 	essence -= 25
-	var type := rng.randi_range(0,UNIT_DEFS.size()-1)
+	var total:=0
+	for i in UNIT_DEFS.size(): total+=GameContent.rarity_weight(i)
+	var roll:=rng.randi_range(1,total); var type:=0
+	for i in UNIT_DEFS.size():
+		roll-=GameContent.rarity_weight(i)
+		if roll<=0: type=i; break
 	var slot := units.size()
 	var col := slot % 6
 	var row := slot / 6
 	units.append({"type":type,"level":1,"pos":Vector2(120+col*160,555+row*80),"cooldown":rng.randf_range(0,0.5)})
 	message = "%s schließt sich dem Pakt an!" % UNIT_DEFS[type].name
 	message_time=2
+	if tutorial_step==0: tutorial_step=1
 
 func merge_selected() -> void:
 	if selected < 0 or selected >= units.size(): return
@@ -136,6 +188,7 @@ func merge_selected() -> void:
 	for j in range(2,0,-1): units.remove_at(matches[j])
 	units[keep].level += 1
 	selected=-1; message="MERGE! Fähigkeit verstärkt"; message_time=2
+	if tutorial_step==1: tutorial_step=2
 	reflow_units()
 
 func reflow_units() -> void:
@@ -147,6 +200,9 @@ func active_covenants() -> Array[String]:
 	var result:Array[String]=[]
 	if elements.get("Nature",0)>=2: result.append("Dornenbund")
 	if elements.get("Fire",0)>=1 and elements.get("Storm",0)>=1: result.append("Flammenwirbel")
+	if elements.get("Water",0)>=1 and elements.get("Storm",0)>=1: result.append("Gezeitenblitz")
+	if elements.get("Guardian",0)>=1 and elements.get("Water",0)>=1: result.append("Schutzquell")
+	if elements.get("Arcane",0)>=2: result.append("Sterneneid")
 	return result
 
 func _gui_input(event:InputEvent) -> void:
@@ -156,6 +212,11 @@ func _gui_input(event:InputEvent) -> void:
 		handle_press(event.position)
 
 func handle_press(p:Vector2) -> void:
+	if screen=="menu":
+		if menu_play_rect.has_point(p): begin_match(); return
+		if menu_map_rect.has_point(p): map_index=(map_index+1)%GameContent.MAPS.size(); return
+		if tutorial_rect.has_point(p): tutorial_step=0; begin_match(); return
+		return
 	if game_over: get_tree().reload_current_scene(); return
 	if summon_rect.has_point(p): summon(); return
 	if wave_rect.has_point(p): start_wave(); return
@@ -165,9 +226,13 @@ func handle_press(p:Vector2) -> void:
 
 func _draw() -> void:
 	var size := get_viewport_rect().size
+	if screen=="menu": draw_menu(size); return
+	var map:Dictionary=GameContent.MAPS[map_index]
 	draw_rect(Rect2(Vector2.ZERO,size),Color("#15283a"))
-	draw_rect(Rect2(0,105,size.x,390),Color("#294b4b"))
-	for i in PATH.size()-1: draw_line(PATH[i],PATH[i+1],Color("#b89568"),46,true)
+	draw_rect(Rect2(0,105,size.x,390),map.ground)
+	for i in PATH.size()-1:
+		draw_line(PATH[i]+Vector2(0,8),PATH[i+1]+Vector2(0,8),Color(0.05,0.08,0.1,0.28),54,true)
+		draw_line(PATH[i],PATH[i+1],map.path,46,true)
 	draw_string(ThemeDB.fallback_font,Vector2(28,42),"CRITTER COVENANT",HORIZONTAL_ALIGNMENT_LEFT,400,30,Color("#f4e8bf"))
 	draw_string(ThemeDB.fallback_font,Vector2(28,78),"❤ %d    ✦ %d Essence    Welle %d    Gegner %d" %[lives,essence,wave,enemies.size()+spawn_left],0,-1,21,Color.WHITE)
 	var cov := active_covenants()
@@ -175,31 +240,69 @@ func _draw() -> void:
 	for e in enemies:
 		var ep:Vector2=e.pos
 		draw_circle(ep,e.radius,e.color)
+		if e.boss: draw_arc(ep,e.radius+9,0,TAU,48,Color("#ffdb70"),3)
 		draw_circle(ep-Vector2(5,4),3,Color.WHITE); draw_circle(ep+Vector2(5,-4),3,Color.WHITE)
 		draw_rect(Rect2(ep.x-e.radius,ep.y-e.radius-9,e.radius*2,4),Color("#401b32"))
 		draw_rect(Rect2(ep.x-e.radius,ep.y-e.radius-9,e.radius*2*maxf(0,e.hp/e.max_hp),4),Color("#72e082"))
-	for p in projectiles: draw_circle(p.pos+Vector2(0,0),5,p.color)
+	for p in projectiles: draw_circle(p.pos,5,p.color)
+	for p in particles: draw_circle(p.pos,maxf(1,p.life*9),Color(p.color,p.life*1.8))
 	for i in units.size():
 		var u:=units[i]; var d:Dictionary=UNIT_DEFS[u.type]
 		if i==selected: draw_circle(u.pos,38,Color("#fff0a6")); draw_arc(u.pos,175,0,TAU,64,Color(1,1,1,0.1),2)
-		draw_circle(u.pos,29,d.color); draw_circle(u.pos-Vector2(8,3),4,Color.WHITE); draw_circle(u.pos+Vector2(8,-3),4,Color.WHITE)
+		draw_circle(u.pos,31,Color("#0e1b29")); draw_texture_rect(PORTRAITS[u.type],Rect2(u.pos-Vector2(27,27),Vector2(54,54)),false,d.color.lightened(0.22))
 		draw_string(ThemeDB.fallback_font,u.pos+Vector2(-55,47),d.name,1,110,13,Color.WHITE)
 		draw_string(ThemeDB.fallback_font,u.pos+Vector2(-10,6),str(u.level),1,20,16,Color("#17202a"))
 	summon_rect=Rect2(size.x-245,size.y-72,215,50); wave_rect=Rect2(30,size.y-72,190,50); merge_rect=Rect2(size.x/2-95,size.y-72,190,50)
 	draw_button(wave_rect,"NÄCHSTE WELLE",not wave_running); draw_button(summon_rect,"BESCHWÖREN 25",essence>=25); draw_button(merge_rect,"3× MERGE",selected>=0)
+	if selected>=0 and selected<units.size(): draw_unit_card(size,units[selected])
+	if combo>=2: draw_string(ThemeDB.fallback_font,Vector2(size.x-175,83),"%d× COMBO"%combo,1,150,18,Color("#ffe36d"))
 	if message_time>0 or game_over:
 		draw_rect(Rect2(size.x/2-260,112,520,48),Color(0.05,0.08,0.12,0.9))
 		draw_string(ThemeDB.fallback_font,Vector2(size.x/2-245,145),message,1,490,20,Color.WHITE)
+	if tutorial_step<3:
+		var tips:=["Beschwöre einen zufälligen Hüter.","Wähle gleiche Hüter und merge drei davon.","Starte die Welle und verteidige den Pfad."]
+		draw_rect(Rect2(330,size.y-126,620,42),Color(0.02,0.05,0.08,0.94))
+		draw_string(ThemeDB.fallback_font,Vector2(345,size.y-98),"TUTORIAL %d/3  %s"%[tutorial_step+1,tips[tutorial_step]],1,590,16,Color("#fff0a6"))
 
 func draw_button(rect:Rect2,label:String,enabled:bool) -> void:
-	draw_rect(rect,Color("#d89445") if enabled else Color("#56616b"))
+	draw_texture_rect(BUTTON_TEX,rect,false,Color("#ef9e3f") if enabled else Color("#65717c"))
 	draw_string(ThemeDB.fallback_font,rect.position+Vector2(8,33),label,1,rect.size.x-16,18,Color.WHITE)
 
+func draw_menu(size:Vector2) -> void:
+	draw_rect(Rect2(Vector2.ZERO,size),Color("#102336"))
+	for i in 18:
+		var x=float((i*173)%int(size.x)); var y=float(90+(i*97)%int(size.y-100))
+		draw_circle(Vector2(x,y),60+float(i%4)*18,Color(0.16,0.42,0.38,0.16))
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-360,145),"CRITTER COVENANT",1,720,48,Color("#fff0bb"))
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-300,190),"SCHMIEDE PAKTE. BESIEGE DIE VERDERBNIS.",1,600,17,Color("#a9cad0"))
+	for i in 6: draw_texture_rect(PORTRAITS[i],Rect2(size.x/2-255+i*82,235+sin(i)*12,68,68),false)
+	var map:Dictionary=GameContent.MAPS[map_index]
+	menu_map_rect=Rect2(size.x/2-240,345,480,70); draw_texture_rect(BUTTON_TEX,menu_map_rect,false,Color("#387f83"))
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-225,375),map.name,1,450,23,Color.WHITE)
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-225,400),map.subtitle,1,450,14,Color("#c9e7e2"))
+	menu_play_rect=Rect2(size.x/2-170,450,340,64); draw_button(menu_play_rect,"ABENTEUER STARTEN",true)
+	tutorial_rect=Rect2(size.x/2-120,535,240,50); draw_button(tutorial_rect,"TUTORIAL",true)
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-250,size.y-55),"Bestwelle %d   ✦ %d Sternenstaub"%[best_wave,star_dust],1,500,17,Color("#e5d990"))
+
+func draw_unit_card(size:Vector2,u:Dictionary) -> void:
+	var d:Dictionary=UNIT_DEFS[u.type]; var rect:=Rect2(size.x-300,112,270,122)
+	draw_rect(rect,Color(0.04,0.08,0.13,0.94)); draw_texture_rect(PORTRAITS[u.type],Rect2(rect.position+Vector2(12,14),Vector2(74,74)),false)
+	draw_string(ThemeDB.fallback_font,rect.position+Vector2(96,32),d.name,0,155,19,Color.WHITE)
+	draw_string(ThemeDB.fallback_font,rect.position+Vector2(96,55),"%s · %s"%[d.rarity,d.element],0,160,13,d.accent)
+	draw_string(ThemeDB.fallback_font,rect.position+Vector2(96,78),d.ability,0,160,15,Color("#dcebf2"))
+	draw_string(ThemeDB.fallback_font,rect.position+Vector2(12,108),"Stufe %d · Schaden %d · Reichweite %d"%[u.level,int(d.damage*u.level),int(d.range)],0,245,13,Color("#b9cad3"))
+
+func begin_match() -> void:
+	screen="match"; essence=120; lives=20; wave=0; units.clear(); enemies.clear(); projectiles.clear(); selected=-1; game_over=false
+
 func save_progress() -> void:
+	best_wave=maxi(best_wave,wave)
 	var f:=FileAccess.open("user://save.json",FileAccess.WRITE)
-	if f: f.store_string(JSON.stringify({"best_wave":wave}))
+	if f: f.store_string(JSON.stringify({"version":2,"best_wave":best_wave,"star_dust":star_dust,"last_map":map_index}))
 
 func load_progress() -> void:
 	if FileAccess.file_exists("user://save.json"):
 		var data=JSON.parse_string(FileAccess.get_file_as_string("user://save.json"))
-		if data is Dictionary: message="Willkommen zurück – Bestwelle %d" % int(data.get("best_wave",0))
+		if data is Dictionary:
+			best_wave=int(data.get("best_wave",0)); star_dust=int(data.get("star_dust",0)); map_index=clampi(int(data.get("last_map",0)),0,GameContent.MAPS.size()-1)
+			message="Willkommen zurück – Bestwelle %d" % best_wave
