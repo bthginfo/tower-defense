@@ -259,7 +259,6 @@ func _draw() -> void:
 	var size := get_viewport_rect().size
 	if screen=="menu": draw_menu(size); return
 	var map:Dictionary=GameContent.MAPS[map_index]
-	draw_texture_rect(ARENA_TEX,Rect2(Vector2.ZERO,size),false)
 	draw_rect(Rect2(0,0,size.x,92),Color(0.025,0.06,0.1,0.92))
 	draw_rect(Rect2(0,size.y-96,size.x,96),Color(0.025,0.06,0.1,0.92))
 	if map_index>0: draw_rect(Rect2(Vector2.ZERO,size),Color(map.ground,0.08))
@@ -302,7 +301,6 @@ func draw_button(rect:Rect2,label:String,enabled:bool) -> void:
 	draw_string(ThemeDB.fallback_font,rect.position+Vector2(8,33),label,1,rect.size.x-16,18,Color.WHITE)
 
 func draw_menu(size:Vector2) -> void:
-	draw_texture_rect(ARENA_TEX,Rect2(Vector2.ZERO,size),false)
 	draw_rect(Rect2(Vector2.ZERO,size),Color(0.015,0.04,0.08,0.72))
 	draw_rect(Rect2(size.x/2-390,58,780,605),Color(0.02,0.065,0.105,0.82))
 	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-360,145),"CRITTER COVENANT",1,720,48,Color("#ffe6a0"))
