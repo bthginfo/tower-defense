@@ -27,7 +27,9 @@ Mit **Beschwören** zufällige Hüter kaufen, Hüter antippen/anklicken und drei
 
 ## Assets und Tests
 
-Die Tierportraits und UI-Texturen stammen aus den CC0-Paketen **Kenney Animal Pack Remastered** und **Kenney UI Pack**. Herkunft und Lizenz sind in `ASSET_MANIFEST.json`, `ATTRIBUTION.md` und `LICENSES/third_party/` dokumentiert. Der reproduzierbare Downloader liegt unter `scripts/assets/fetch_assets.ps1`.
+Die Tierportraits, UI-Texturen und die isometrische 3D-Welt stammen aus den CC0-Paketen **Kenney Animal Pack Remastered**, **Kenney UI Pack** und **Kenney Tower Defense Kit**. Herkunft und Lizenz sind in `ASSET_MANIFEST.json`, `ATTRIBUTION.md` und `LICENSES/third_party/` dokumentiert. Der reproduzierbare Downloader liegt unter `scripts/assets/fetch_assets.ps1`.
+
+Hüter stehen auf zwölf taktischen Slots direkt am Gegnerpfad. Wähle einen Hüter und tippe einen freien Slot an oder ziehe ihn per Maus/Touch auf den Zielslot, um ihn während des Matches neu zu positionieren.
 
 ```powershell
 godot --headless --path . --script tests/run_tests.gd

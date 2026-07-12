@@ -7,6 +7,7 @@ const PORTRAITS:Array[Texture2D] = [
 ]
 const BUTTON_TEX:Texture2D=preload("res://assets/third_party/kenney/ui/button_rectangle_depth_gradient.png")
 const PATH := [Vector2(0,170),Vector2(210,170),Vector2(210,365),Vector2(520,365),Vector2(520,150),Vector2(790,150),Vector2(790,420),Vector2(1100,420)]
+const SLOTS:Array[Vector2] = [Vector2(105,105),Vector2(105,245),Vector2(330,285),Vector2(395,430),Vector2(440,230),Vector2(650,90),Vector2(675,245),Vector2(690,455),Vector2(865,325),Vector2(900,485),Vector2(985,335),Vector2(1060,485)]
 var rng := RandomNumberGenerator.new()
 var units:Array[Dictionary] = []
 var enemies:Array[Dictionary] = []
@@ -37,6 +38,7 @@ var tutorial_rect := Rect2()
 var particles:Array[Dictionary] = []
 var combo := 0
 var combo_clock := 0.0
+var dragging := false
 
 func _ready() -> void:
 	rng.seed = int(Time.get_unix_time_from_system())
@@ -169,10 +171,8 @@ func summon() -> void:
 	for i in UNIT_DEFS.size():
 		roll-=GameContent.rarity_weight(i)
 		if roll<=0: type=i; break
-	var slot := units.size()
-	var col := slot % 6
-	var row := slot / 6
-	units.append({"type":type,"level":1,"pos":Vector2(120+col*160,555+row*80),"cooldown":rng.randf_range(0,0.5)})
+	var slot:=first_free_slot()
+	units.append({"type":type,"level":1,"pos":SLOTS[slot],"slot":slot,"cooldown":rng.randf_range(0,0.5)})
 	message = "%s schließt sich dem Pakt an!" % UNIT_DEFS[type].name
 	message_time=2
 	if tutorial_step==0: tutorial_step=1
@@ -192,7 +192,27 @@ func merge_selected() -> void:
 	reflow_units()
 
 func reflow_units() -> void:
-	for i in units.size(): units[i].pos=Vector2(120+(i%6)*160,555+(i/6)*80)
+	pass
+
+func first_free_slot() -> int:
+	for slot in SLOTS.size():
+		var free:=true
+		for u in units:
+			if int(u.slot)==slot: free=false; break
+		if free: return slot
+	return 0
+
+func move_selected_to(point:Vector2) -> void:
+	if selected<0 or selected>=units.size(): return
+	var best:=-1; var distance:=55.0
+	for i in SLOTS.size():
+		var d:=SLOTS[i].distance_to(point)
+		if d<distance: best=i; distance=d
+	if best<0: return
+	for u in units:
+		if int(u.slot)==best: return
+	units[selected].slot=best; units[selected].pos=SLOTS[best]
+	message="Hüter neu positioniert"; message_time=1.2
 
 func active_covenants() -> Array[String]:
 	var elements:Dictionary={}
@@ -207,9 +227,17 @@ func active_covenants() -> Array[String]:
 
 func _gui_input(event:InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
+		dragging=true
 		handle_press(event.position)
+	elif event is InputEventMouseButton and not event.pressed:
+		if dragging: move_selected_to(event.position)
+		dragging=false
 	elif event is InputEventScreenTouch and event.pressed:
+		dragging=true
 		handle_press(event.position)
+	elif event is InputEventScreenTouch and not event.pressed:
+		if dragging: move_selected_to(event.position)
+		dragging=false
 
 func handle_press(p:Vector2) -> void:
 	if screen=="menu":
@@ -223,16 +251,20 @@ func handle_press(p:Vector2) -> void:
 	if merge_rect.has_point(p): merge_selected(); return
 	for i in units.size():
 		if units[i].pos.distance_to(p)<32: selected=i; return
+	if selected>=0: move_selected_to(p)
 
 func _draw() -> void:
 	var size := get_viewport_rect().size
 	if screen=="menu": draw_menu(size); return
 	var map:Dictionary=GameContent.MAPS[map_index]
-	draw_rect(Rect2(Vector2.ZERO,size),Color("#15283a"))
-	draw_rect(Rect2(0,105,size.x,390),map.ground)
+	draw_rect(Rect2(0,0,size.x,105),Color("#102438"))
+	draw_rect(Rect2(0,495,size.x,size.y-495),Color("#102438"))
+	draw_rect(Rect2(0,105,size.x,390),Color(map.ground,0.34))
 	for i in PATH.size()-1:
 		draw_line(PATH[i]+Vector2(0,8),PATH[i+1]+Vector2(0,8),Color(0.05,0.08,0.1,0.28),54,true)
 		draw_line(PATH[i],PATH[i+1],map.path,46,true)
+	for slot in SLOTS:
+		draw_circle(slot,36,Color(0.03,0.08,0.11,0.62)); draw_arc(slot,32,0,TAU,32,Color(0.55,0.85,0.75,0.42),2)
 	draw_string(ThemeDB.fallback_font,Vector2(28,42),"CRITTER COVENANT",HORIZONTAL_ALIGNMENT_LEFT,400,30,Color("#f4e8bf"))
 	draw_string(ThemeDB.fallback_font,Vector2(28,78),"❤ %d    ✦ %d Essence    Welle %d    Gegner %d" %[lives,essence,wave,enemies.size()+spawn_left],0,-1,21,Color.WHITE)
 	var cov := active_covenants()
