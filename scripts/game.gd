@@ -259,7 +259,7 @@ func _draw() -> void:
 	var map:Dictionary=GameContent.MAPS[map_index]
 	draw_rect(Rect2(0,0,size.x,105),Color("#102438"))
 	draw_rect(Rect2(0,495,size.x,size.y-495),Color("#102438"))
-	draw_rect(Rect2(0,105,size.x,390),Color(map.ground,0.34))
+	draw_rect(Rect2(0,105,size.x,390),Color(map.ground,0.78))
 	for i in PATH.size()-1:
 		draw_line(PATH[i]+Vector2(0,8),PATH[i+1]+Vector2(0,8),Color(0.05,0.08,0.1,0.28),54,true)
 		draw_line(PATH[i],PATH[i+1],map.path,46,true)
