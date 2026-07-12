@@ -2,3 +2,5 @@
 public/
 *.tmp
 
+
+.vercel
