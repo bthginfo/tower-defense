@@ -54,6 +54,16 @@ var speed_rect:=Rect2()
 var pause_rect:=Rect2()
 var emergency_rect:=Rect2()
 var result_rect:=Rect2()
+var collection_rect:=Rect2()
+var codex_rect:=Rect2()
+var profile_rect:=Rect2()
+var back_rect:=Rect2()
+var focused_rect:=Rect2()
+var focus_cycle_rect:=Rect2()
+var selected_collection_unit:=-1
+var pity_counter:=0
+var focus_element_index:=0
+const FOCUS_ELEMENTS:=["Nature","Fire","Water","Storm","Arcane","Guardian","Alchemist"]
 
 func _ready() -> void:
 	rng.seed = int(Time.get_unix_time_from_system())
@@ -206,20 +216,29 @@ func finish_match(won:bool) -> void:
 func unlock_achievement(title:String) -> void:
 	if not achievements.has(title): achievements.append(title)
 
-func summon() -> void:
-	if essence < 25 or units.size() >= 12: message="Nicht genug Essence oder Brett voll"; message_time=2; return
-	essence -= 25
-	var total:=0
-	for i in UNIT_DEFS.size(): total+=GameContent.rarity_weight(i)
-	var roll:=rng.randi_range(1,total); var type:=0
-	for i in UNIT_DEFS.size():
-		roll-=GameContent.rarity_weight(i)
-		if roll<=0: type=i; break
+func summon(focused:=false) -> void:
+	var cost:=45 if focused else 25
+	if essence < cost or units.size() >= 12: message="Nicht genug Essence oder Brett voll"; message_time=2; return
+	essence -= cost
+	var type:=pick_unit(focused)
+	if SummonRules.resets_pity(UNIT_DEFS[type].rarity): pity_counter=0
+	else: pity_counter+=1
 	var slot:=first_free_slot()
 	units.append({"type":type,"level":1,"pos":SLOTS[slot],"slot":slot,"cooldown":rng.randf_range(0,0.5)})
 	message = "%s schließt sich dem Pakt an!" % UNIT_DEFS[type].name
 	message_time=2
 	if tutorial_step==0: tutorial_step=1
+
+func pick_unit(focused:bool) -> int:
+	var weights:Array[int]=[]; var total:=0; var focus:String=FOCUS_ELEMENTS[focus_element_index]
+	for i in UNIT_DEFS.size():
+		var weight:=SummonRules.adjusted_weight(GameContent.rarity_weight(i),UNIT_DEFS[i].rarity,UNIT_DEFS[i].element,pity_counter,focused,focus)
+		weights.append(weight); total+=weight
+	var roll:=rng.randi_range(1,total)
+	for i in weights.size():
+		roll-=weights[i]
+		if roll<=0: return i
+	return 0
 
 func merge_selected() -> void:
 	if selected < 0 or selected >= units.size(): return
@@ -288,6 +307,16 @@ func handle_press(p:Vector2) -> void:
 		if menu_play_rect.has_point(p): begin_match(); return
 		if menu_map_rect.has_point(p): map_index=(map_index+1)%GameContent.MAPS.size(); return
 		if tutorial_rect.has_point(p): begin_match(); tutorial_step=0; return
+		if collection_rect.has_point(p): screen="collection"; return
+		if codex_rect.has_point(p): screen="codex"; return
+		if profile_rect.has_point(p): screen="profile"; return
+		return
+	if screen in ["collection","codex","profile"]:
+		if back_rect.has_point(p): selected_collection_unit=-1; screen="menu"; return
+		if screen=="collection":
+			for i in UNIT_DEFS.size():
+				var card:=Rect2(90+(i%4)*285,145+(i/4)*150,250,125)
+				if card.has_point(p): selected_collection_unit=i; return
 		return
 	if screen=="result":
 		if result_rect.has_point(p): screen="menu"
@@ -296,6 +325,8 @@ func handle_press(p:Vector2) -> void:
 	if pause_rect.has_point(p): paused=not paused; return
 	if speed_rect.has_point(p): speed=1.0 if speed>=3.0 else speed+1.0; return
 	if emergency_rect.has_point(p): emergency_bloom(); return
+	if focused_rect.has_point(p): summon(true); return
+	if focus_cycle_rect.has_point(p): focus_element_index=(focus_element_index+1)%FOCUS_ELEMENTS.size(); return
 	if summon_rect.has_point(p): summon(); return
 	if wave_rect.has_point(p): start_wave(); return
 	if merge_rect.has_point(p): merge_selected(); return
@@ -307,6 +338,9 @@ func _draw() -> void:
 	var size := get_viewport_rect().size
 	if screen=="menu": draw_menu(size); return
 	if screen=="result": draw_result(size); return
+	if screen=="collection": draw_collection(size); return
+	if screen=="codex": draw_codex(size); return
+	if screen=="profile": draw_profile(size); return
 	var map:Dictionary=GameContent.MAPS[map_index]
 	draw_rect(Rect2(0,0,size.x,92),Color(0.025,0.06,0.1,0.92))
 	draw_rect(Rect2(0,size.y-96,size.x,96),Color(0.025,0.06,0.1,0.92))
@@ -336,6 +370,8 @@ func _draw() -> void:
 	summon_rect=Rect2(size.x-245,size.y-72,215,50); wave_rect=Rect2(30,size.y-72,190,50); merge_rect=Rect2(size.x/2-95,size.y-72,190,50)
 	draw_button(wave_rect,"NÄCHSTE WELLE",not wave_running); draw_button(summon_rect,"BESCHWÖREN 25",essence>=25); draw_button(merge_rect,"3× MERGE",selected>=0)
 	emergency_rect=Rect2(size.x-465,size.y-72,195,50); draw_button(emergency_rect,"COVENANT-BLÜTE",emergency_ready)
+	focused_rect=Rect2(245,size.y-72,190,50); draw_button(focused_rect,"FOCUS 45",essence>=45)
+	focus_cycle_rect=Rect2(445,size.y-72,120,50); draw_button(focus_cycle_rect,FOCUS_ELEMENTS[focus_element_index],true)
 	speed_rect=Rect2(size.x-155,18,55,42); pause_rect=Rect2(size.x-88,18,55,42)
 	draw_button(speed_rect,"%d×"%int(speed),true); draw_button(pause_rect,"▶" if paused else "Ⅱ",true)
 	if selected>=0 and selected<units.size(): draw_unit_card(size,units[selected])
@@ -365,8 +401,63 @@ func draw_menu(size:Vector2) -> void:
 	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-225,375),map.name,1,450,23,Color.WHITE)
 	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-225,400),map.subtitle,1,450,14,Color("#c9e7e2"))
 	menu_play_rect=Rect2(size.x/2-170,450,340,64); draw_button(menu_play_rect,"ABENTEUER STARTEN",true)
-	tutorial_rect=Rect2(size.x/2-120,535,240,50); draw_button(tutorial_rect,"TUTORIAL",true)
+	tutorial_rect=Rect2(250,535,175,50); draw_button(tutorial_rect,"TUTORIAL",true)
+	collection_rect=Rect2(440,535,175,50); draw_button(collection_rect,"SAMMLUNG",true)
+	codex_rect=Rect2(630,535,175,50); draw_button(codex_rect,"COVENANTS",true)
+	profile_rect=Rect2(820,535,175,50); draw_button(profile_rect,"PROFIL",true)
 	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-250,size.y-55),"Bestwelle %d   ✦ %d Sternenstaub"%[best_wave,star_dust],1,500,17,Color("#e5d990"))
+
+func draw_meta_header(size:Vector2,title:String,subtitle:String) -> void:
+	draw_rect(Rect2(Vector2.ZERO,size),Color(0.01,0.035,0.06,0.88))
+	draw_string(ThemeDB.fallback_font,Vector2(70,72),title,0,700,36,Color("#ffe59a"))
+	draw_string(ThemeDB.fallback_font,Vector2(72,105),subtitle,0,850,16,Color("#a9cad0"))
+	back_rect=Rect2(size.x-205,35,155,50); draw_button(back_rect,"ZURÜCK",true)
+
+func draw_collection(size:Vector2) -> void:
+	draw_meta_header(size,"HÜTER-SAMMLUNG","12 magische Verbündete · tippe eine Karte für Details")
+	for i in UNIT_DEFS.size():
+		var d:Dictionary=UNIT_DEFS[i]; var card:=Rect2(90+(i%4)*285,145+(i/4)*150,250,125)
+		draw_rect(card,Color(0.035,0.09,0.12,0.94)); draw_rect(Rect2(card.position,Vector2(6,card.size.y)),d.color)
+		draw_texture_rect(PORTRAITS[i],Rect2(card.position+Vector2(8,6),Vector2(105,105)),false)
+		draw_string(ThemeDB.fallback_font,card.position+Vector2(112,30),d.name,0,130,17,Color.WHITE)
+		draw_string(ThemeDB.fallback_font,card.position+Vector2(112,55),d.rarity,0,130,13,d.accent)
+		draw_string(ThemeDB.fallback_font,card.position+Vector2(112,77),d.element+" · "+d.role,0,130,12,Color("#b5cbd1"))
+		draw_string(ThemeDB.fallback_font,card.position+Vector2(112,101),d.ability,0,130,12,Color("#f2dca0"))
+	if selected_collection_unit>=0:
+		var d:Dictionary=UNIT_DEFS[selected_collection_unit]; var panel:=Rect2(300,155,680,400)
+		draw_rect(panel,Color(0.015,0.045,0.075,0.98)); draw_texture_rect(PORTRAITS[selected_collection_unit],Rect2(325,185,260,260),false)
+		draw_string(ThemeDB.fallback_font,Vector2(595,220),d.name,0,340,30,Color.WHITE)
+		draw_string(ThemeDB.fallback_font,Vector2(595,252),d.rarity+" · "+d.element+" · "+d.role,0,340,15,d.accent)
+		draw_string(ThemeDB.fallback_font,Vector2(595,300),d.ability,0,340,22,Color("#ffe49a"))
+		draw_string(ThemeDB.fallback_font,Vector2(595,340),"Schaden %d   Reichweite %d   Tempo %.2f"%[int(d.damage),int(d.range),float(d.rate)],0,340,15,Color("#c9dce1"))
+		draw_string(ThemeDB.fallback_font,Vector2(595,390),"Elementfähigkeiten verändern Angriffe und" ,0,340,14,Color("#a9c4cc"))
+		draw_string(ThemeDB.fallback_font,Vector2(595,412),"kombinieren sich zu mächtigen Covenants.",0,340,14,Color("#a9c4cc"))
+
+func draw_codex(size:Vector2) -> void:
+	draw_meta_header(size,"COVENANT-CODEX","Pakte entstehen aus Elementkombinationen – nicht aus einzelnen Meta-Boni")
+	var entries:=[
+		["Dornenbund","2× Nature","Wachsende Dornen und verstärkte Projektile","#75dc7c"],
+		["Flammenwirbel","Fire + Storm","Flächenschaden und Kettenreaktionen","#ff925f"],
+		["Gezeitenblitz","Water + Storm","Slow kombiniert mit Kettenblitzen","#63d9ed"],
+		["Schutzquell","Guardian + Water","Heilung und defensive Kontrolle","#8ed4b2"],
+		["Sterneneid","2× Arcane","Execute-Schaden gegen geschwächte Gegner","#d09aff"]]
+	for i in entries.size():
+		var row:=Rect2(145,150+i*98,990,78); draw_rect(row,Color(0.03,0.085,0.115,0.94)); draw_rect(Rect2(row.position,Vector2(8,row.size.y)),Color(entries[i][3]))
+		draw_string(ThemeDB.fallback_font,row.position+Vector2(35,31),entries[i][0],0,240,21,Color.WHITE)
+		draw_string(ThemeDB.fallback_font,row.position+Vector2(285,29),entries[i][1],0,210,16,Color(entries[i][3]))
+		draw_string(ThemeDB.fallback_font,row.position+Vector2(500,29),entries[i][2],0,450,15,Color("#c1d7dc"))
+
+func draw_profile(size:Vector2) -> void:
+	draw_meta_header(size,"HÜTER-PROFIL","Fortschritt, Quests und Achievements werden lokal gespeichert")
+	draw_string(ThemeDB.fallback_font,Vector2(125,185),"PROFILSTUFE %d"%(1+star_dust/100),0,350,28,Color("#ffe18a"))
+	draw_string(ThemeDB.fallback_font,Vector2(125,225),"%d Sternenstaub · %d Siege · %d Matches"%[star_dust,total_wins,matches_played],0,600,18,Color.WHITE)
+	draw_string(ThemeDB.fallback_font,Vector2(125,285),"AKTIVE QUESTS",0,300,20,Color("#8fe5d2"))
+	var quests:=[["Erreiche Welle 10",mini(best_wave,10),10],["Gewinne 3 Matches",mini(total_wins,3),3],["Sammle 500 Sternenstaub",mini(star_dust,500),500]]
+	for i in quests.size():
+		var y:=320+i*74; draw_rect(Rect2(125,y,680,56),Color(0.035,0.09,0.12,0.95)); draw_string(ThemeDB.fallback_font,Vector2(145,y+25),quests[i][0],0,350,16,Color.WHITE)
+		draw_rect(Rect2(500,y+20,270,12),Color("#163744")); draw_rect(Rect2(500,y+20,270.0*float(quests[i][1])/float(quests[i][2]),12),Color("#55d1a8"))
+	draw_string(ThemeDB.fallback_font,Vector2(855,285),"ACHIEVEMENTS",0,300,20,Color("#f0d778"))
+	for i in achievements.size(): draw_string(ThemeDB.fallback_font,Vector2(855,330+i*32),"✦ "+achievements[i],0,320,16,Color("#e9dfb0"))
 
 func draw_unit_card(size:Vector2,u:Dictionary) -> void:
 	var d:Dictionary=UNIT_DEFS[u.type]; var rect:=Rect2(size.x-300,112,270,122)

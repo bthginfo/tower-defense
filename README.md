@@ -4,6 +4,8 @@ Ein eigenständiges, luck-basiertes Tower-Defense-Spiel für Godot 4.7. Der aktu
 
 Ein vollständiges Match umfasst 30 Wellen. Elite-Wellen erscheinen alle vier Wellen, Bosse alle fünf Wellen. Der HUD unterstützt Pause, 1×–3× Tempo und eine einmalige Covenant-Blüte als Notfallfähigkeit. Ergebnisbelohnungen, Siege und Achievements werden lokal versioniert gespeichert.
 
+Das Hauptmenü enthält eine vollständige Hüter-Sammlung mit Detailkarten, einen Covenant-Codex sowie Profil-, Quest- und Achievement-Fortschritt. Neben der Standardbeschwörung gibt es eine teurere Focus-Beschwörung nach Element. Nach sieben Ziehungen ohne Rare oder Legendary erhöht der Pity-Schutz deren Gewicht deutlich.
+
 ## Lokal starten
 
 ```powershell
