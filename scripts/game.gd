@@ -41,6 +41,19 @@ var particles:Array[Dictionary] = []
 var combo := 0
 var combo_clock := 0.0
 var dragging := false
+var elite_wave := false
+var paused := false
+var emergency_ready := true
+var victory := false
+var match_kills := 0
+var match_essence_earned := 0
+var total_wins := 0
+var matches_played := 0
+var achievements:Array[String] = []
+var speed_rect:=Rect2()
+var pause_rect:=Rect2()
+var emergency_rect:=Rect2()
+var result_rect:=Rect2()
 
 func _ready() -> void:
 	rng.seed = int(Time.get_unix_time_from_system())
@@ -49,6 +62,7 @@ func _ready() -> void:
 
 func _process(delta:float) -> void:
 	if screen != "match": queue_redraw(); return
+	if paused: queue_redraw(); return
 	if game_over: queue_redraw(); return
 	var dt := delta * speed
 	message_time = maxf(0.0, message_time-delta)
@@ -66,8 +80,10 @@ func _process(delta:float) -> void:
 	update_particles(dt)
 	if wave_running and spawn_left == 0 and enemies.is_empty():
 		wave_running = false
-		essence += 25 + wave * 3
-		message = "Welle geschafft! +%d Essence" % (25 + wave*3)
+		if wave>=MatchRules.FINAL_WAVE: finish_match(true); return
+		var wave_reward:=MatchRules.wave_reward(wave)
+		essence += wave_reward; match_essence_earned+=wave_reward
+		message = "Welle geschafft! +%d Essence" % wave_reward
 		message_time = 3.0
 		save_progress()
 	queue_redraw()
@@ -75,10 +91,11 @@ func _process(delta:float) -> void:
 func start_wave() -> void:
 	if wave_running or game_over: return
 	wave += 1
-	boss_wave = wave % 5 == 0
-	spawn_left = 1 if boss_wave else 6 + wave * 2
+	boss_wave = MatchRules.is_boss_wave(wave)
+	elite_wave = MatchRules.is_elite_wave(wave)
+	spawn_left = MatchRules.enemy_count(wave)
 	wave_running = true
-	message = "BOSS: Der Verderbnis-Koloss!" if boss_wave else "Welle %d beginnt" % wave
+	message = "BOSS: Der Verderbnis-Koloss!" if boss_wave else ("ELITE-WELLE %d"%wave if elite_wave else "Welle %d beginnt" % wave)
 	message_time = 2.5
 	if tutorial_step==2: tutorial_step=3
 
@@ -91,6 +108,8 @@ func spawn_enemy() -> void:
 	var radius:float = ed.radius
 	if boss_wave:
 		hp *= 12.0; speed_value = 30.0; radius = 34.0; color = Color("#6f315c")
+	elif elite_wave and spawn_left%3==0:
+		hp*=2.8; speed_value*=0.9; radius*=1.35; color=Color("#e65ca8")
 	enemies.append({"pos":PATH[0],"segment":0,"hp":hp,"max_hp":hp,"speed":speed_value,"base_speed":speed_value,"color":color,"radius":radius,"boss":boss_wave,"armor":ed.armor,"slow":0.0,"kind":kind})
 
 func update_enemies(dt:float) -> void:
@@ -106,7 +125,7 @@ func update_enemies(dt:float) -> void:
 			if e.segment >= PATH.size()-1:
 				lives -= 5 if e.boss else 1
 				enemies.remove_at(i)
-				if lives <= 0: game_over=true; message="Die Verderbnis brach durch"
+				if lives <= 0: finish_match(false); return
 
 func update_units(dt:float) -> void:
 	for u in units:
@@ -140,6 +159,7 @@ func update_projectiles(dt:float) -> void:
 			if p.target.hp <= 0:
 				var reward := 18 if p.target.boss else 3
 				essence += reward
+				match_essence_earned+=reward; match_kills+=1
 				combo += 1; combo_clock=2.2
 				enemies.erase(p.target)
 			projectiles.remove_at(i)
@@ -163,6 +183,28 @@ func update_particles(dt:float) -> void:
 	for i in range(particles.size()-1,-1,-1):
 		particles[i].life-=dt; particles[i].pos+=particles[i].vel*dt; particles[i].vel*=0.9
 		if particles[i].life<=0: particles.remove_at(i)
+
+func emergency_bloom() -> void:
+	if not emergency_ready or screen!="match": return
+	emergency_ready=false
+	for e in enemies:
+		e.hp*=0.55; e.slow=4.0; burst(e.pos,Color("#8ffff0"),9)
+	lives=mini(20,lives+3)
+	message="COVENANT-BLÜTE: Gegner geschwächt · +3 Herzen"; message_time=3.0
+
+func finish_match(won:bool) -> void:
+	victory=won; screen="result"; wave_running=false; matches_played+=1
+	best_wave=maxi(best_wave,wave)
+	var reward:=MatchRules.result_reward(wave,won)
+	star_dust+=reward
+	if won: total_wins+=1; unlock_achievement("Covenant Ascendant")
+	if wave>=10: unlock_achievement("Hold the Crossroads")
+	if match_kills>=100: unlock_achievement("Hundred Sparks")
+	if active_covenants().size()>=3: unlock_achievement("Oathweaver")
+	save_progress()
+
+func unlock_achievement(title:String) -> void:
+	if not achievements.has(title): achievements.append(title)
 
 func summon() -> void:
 	if essence < 25 or units.size() >= 12: message="Nicht genug Essence oder Brett voll"; message_time=2; return
@@ -245,9 +287,15 @@ func handle_press(p:Vector2) -> void:
 	if screen=="menu":
 		if menu_play_rect.has_point(p): begin_match(); return
 		if menu_map_rect.has_point(p): map_index=(map_index+1)%GameContent.MAPS.size(); return
-		if tutorial_rect.has_point(p): tutorial_step=0; begin_match(); return
+		if tutorial_rect.has_point(p): begin_match(); tutorial_step=0; return
+		return
+	if screen=="result":
+		if result_rect.has_point(p): screen="menu"
 		return
 	if game_over: get_tree().reload_current_scene(); return
+	if pause_rect.has_point(p): paused=not paused; return
+	if speed_rect.has_point(p): speed=1.0 if speed>=3.0 else speed+1.0; return
+	if emergency_rect.has_point(p): emergency_bloom(); return
 	if summon_rect.has_point(p): summon(); return
 	if wave_rect.has_point(p): start_wave(); return
 	if merge_rect.has_point(p): merge_selected(); return
@@ -258,6 +306,7 @@ func handle_press(p:Vector2) -> void:
 func _draw() -> void:
 	var size := get_viewport_rect().size
 	if screen=="menu": draw_menu(size); return
+	if screen=="result": draw_result(size); return
 	var map:Dictionary=GameContent.MAPS[map_index]
 	draw_rect(Rect2(0,0,size.x,92),Color(0.025,0.06,0.1,0.92))
 	draw_rect(Rect2(0,size.y-96,size.x,96),Color(0.025,0.06,0.1,0.92))
@@ -265,7 +314,7 @@ func _draw() -> void:
 	for slot in SLOTS:
 		draw_circle(slot,31,Color(0.05,0.2,0.24,0.20)); draw_arc(slot,34,0,TAU,40,Color(0.35,0.95,0.88,0.48),2)
 	draw_string(ThemeDB.fallback_font,Vector2(28,42),"CRITTER COVENANT",HORIZONTAL_ALIGNMENT_LEFT,400,30,Color("#f4e8bf"))
-	draw_string(ThemeDB.fallback_font,Vector2(28,78),"❤ %d    ✦ %d Essence    Welle %d    Gegner %d" %[lives,essence,wave,enemies.size()+spawn_left],0,-1,21,Color.WHITE)
+	draw_string(ThemeDB.fallback_font,Vector2(28,78),"❤ %d    ✦ %d Essence    Welle %d/30    Gegner %d" %[lives,essence,wave,enemies.size()+spawn_left],0,-1,21,Color.WHITE)
 	var cov := active_covenants()
 	draw_string(ThemeDB.fallback_font,Vector2(size.x-390,42),"Covenants: "+(", ".join(cov) if cov else "—"),0,360,18,Color("#f0d96c"))
 	for e in enemies:
@@ -286,6 +335,9 @@ func _draw() -> void:
 		draw_circle(u.pos+Vector2(28,-30),12,Color("#18243c")); draw_string(ThemeDB.fallback_font,u.pos+Vector2(20,-24),str(u.level),1,16,13,Color("#ffe27a"))
 	summon_rect=Rect2(size.x-245,size.y-72,215,50); wave_rect=Rect2(30,size.y-72,190,50); merge_rect=Rect2(size.x/2-95,size.y-72,190,50)
 	draw_button(wave_rect,"NÄCHSTE WELLE",not wave_running); draw_button(summon_rect,"BESCHWÖREN 25",essence>=25); draw_button(merge_rect,"3× MERGE",selected>=0)
+	emergency_rect=Rect2(size.x-465,size.y-72,195,50); draw_button(emergency_rect,"COVENANT-BLÜTE",emergency_ready)
+	speed_rect=Rect2(size.x-155,18,55,42); pause_rect=Rect2(size.x-88,18,55,42)
+	draw_button(speed_rect,"%d×"%int(speed),true); draw_button(pause_rect,"▶" if paused else "Ⅱ",true)
 	if selected>=0 and selected<units.size(): draw_unit_card(size,units[selected])
 	if combo>=2: draw_string(ThemeDB.fallback_font,Vector2(size.x-175,83),"%d× COMBO"%combo,1,150,18,Color("#ffe36d"))
 	if message_time>0 or game_over:
@@ -295,6 +347,8 @@ func _draw() -> void:
 		var tips:=["Beschwöre einen zufälligen Hüter.","Wähle gleiche Hüter und merge drei davon.","Starte die Welle und verteidige den Pfad."]
 		draw_rect(Rect2(330,size.y-126,620,42),Color(0.02,0.05,0.08,0.94))
 		draw_string(ThemeDB.fallback_font,Vector2(345,size.y-98),"TUTORIAL %d/3  %s"%[tutorial_step+1,tips[tutorial_step]],1,590,16,Color("#fff0a6"))
+	if paused:
+		draw_rect(Rect2(Vector2.ZERO,size),Color(0,0,0,0.58)); draw_string(ThemeDB.fallback_font,Vector2(size.x/2-180,size.y/2),"PAUSIERT",1,360,36,Color.WHITE)
 
 func draw_button(rect:Rect2,label:String,enabled:bool) -> void:
 	draw_texture_rect(BUTTON_TEX,rect,false,Color("#ef9e3f") if enabled else Color("#65717c"))
@@ -322,17 +376,32 @@ func draw_unit_card(size:Vector2,u:Dictionary) -> void:
 	draw_string(ThemeDB.fallback_font,rect.position+Vector2(96,78),d.ability,0,160,15,Color("#dcebf2"))
 	draw_string(ThemeDB.fallback_font,rect.position+Vector2(12,108),"Stufe %d · Schaden %d · Reichweite %d"%[u.level,int(d.damage*u.level),int(d.range)],0,245,13,Color("#b9cad3"))
 
+func draw_result(size:Vector2) -> void:
+	draw_rect(Rect2(Vector2.ZERO,size),Color(0.01,0.03,0.06,0.78))
+	var panel:=Rect2(size.x/2-330,75,660,570); draw_rect(panel,Color(0.025,0.08,0.12,0.95))
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-280,150),"COVENANT GERETTET" if victory else "DIE VERDERBNIS SIEGT",1,560,38,Color("#ffe58c") if victory else Color("#ff799d"))
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-250,210),"Erreichte Welle",1,500,17,Color("#9fc8d2"))
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-180,285),str(wave),1,360,64,Color.WHITE)
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-250,340),"%d Gegner besiegt   ·   %d Essence verdient"%[match_kills,match_essence_earned],1,500,18,Color("#d8e8eb"))
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-250,382),"Belohnung: +%d Sternenstaub"%MatchRules.result_reward(wave,victory),1,500,21,Color("#f7d76e"))
+	draw_string(ThemeDB.fallback_font,Vector2(size.x/2-250,425),"Achievements: %d   ·   Siege: %d"%[achievements.size(),total_wins],1,500,16,Color("#a9c4cf"))
+	result_rect=Rect2(size.x/2-160,510,320,62); draw_button(result_rect,"ZURÜCK ZUM HEILIGTUM",true)
+
 func begin_match() -> void:
-	screen="match"; essence=120; lives=20; wave=0; units.clear(); enemies.clear(); projectiles.clear(); selected=-1; game_over=false
+	screen="match"; essence=120; lives=20; wave=0; units.clear(); enemies.clear(); projectiles.clear(); particles.clear(); selected=-1; game_over=false
+	match_kills=0; match_essence_earned=0; emergency_ready=true; paused=false; speed=1.0; tutorial_step=3
 
 func save_progress() -> void:
 	best_wave=maxi(best_wave,wave)
 	var f:=FileAccess.open("user://save.json",FileAccess.WRITE)
-	if f: f.store_string(JSON.stringify({"version":2,"best_wave":best_wave,"star_dust":star_dust,"last_map":map_index}))
+	if f: f.store_string(JSON.stringify({"version":3,"best_wave":best_wave,"star_dust":star_dust,"last_map":map_index,"total_wins":total_wins,"matches_played":matches_played,"achievements":achievements}))
 
 func load_progress() -> void:
 	if FileAccess.file_exists("user://save.json"):
 		var data=JSON.parse_string(FileAccess.get_file_as_string("user://save.json"))
 		if data is Dictionary:
 			best_wave=int(data.get("best_wave",0)); star_dust=int(data.get("star_dust",0)); map_index=clampi(int(data.get("last_map",0)),0,GameContent.MAPS.size()-1)
+			total_wins=int(data.get("total_wins",0)); matches_played=int(data.get("matches_played",0))
+			var saved_achievements=data.get("achievements",[])
+			if saved_achievements is Array: achievements.assign(saved_achievements)
 			message="Willkommen zurück – Bestwelle %d" % best_wave

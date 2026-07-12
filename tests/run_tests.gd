@@ -12,6 +12,11 @@ func _init() -> void:
 	var total:=0
 	for i in GameContent.UNITS.size(): total+=GameContent.rarity_weight(i)
 	check(total>0,"summon table has positive weight")
+	check(MatchRules.is_boss_wave(5) and MatchRules.is_boss_wave(30),"boss cadence")
+	check(MatchRules.is_elite_wave(4) and not MatchRules.is_elite_wave(20),"elite cadence excludes boss waves")
+	check(MatchRules.enemy_count(5)==1 and MatchRules.enemy_count(3)==13,"wave enemy counts")
+	check(MatchRules.wave_reward(4)>MatchRules.wave_reward(3),"elite reward premium")
+	check(MatchRules.result_reward(30,true)==120,"final victory reward")
 	if failures==0: print("PASS: content, combat stats and summon table validated")
 	quit(failures)
 

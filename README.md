@@ -2,6 +2,8 @@
 
 Ein eigenständiges, luck-basiertes Tower-Defense-Spiel für Godot 4.7. Der aktuelle spielbare Build enthält zwölf illustrierte Hüter mit Seltenheiten und Elementfähigkeiten, vier Gegnertypen, drei Maps, Bossphasen, gewichtete Beschwörung, 3er-Merges und fünf Covenants.
 
+Ein vollständiges Match umfasst 30 Wellen. Elite-Wellen erscheinen alle vier Wellen, Bosse alle fünf Wellen. Der HUD unterstützt Pause, 1×–3× Tempo und eine einmalige Covenant-Blüte als Notfallfähigkeit. Ergebnisbelohnungen, Siege und Achievements werden lokal versioniert gespeichert.
+
 ## Lokal starten
 
 ```powershell
